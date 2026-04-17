@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Azure App Service + GitHub Actions | CI/CD Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@300;400;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --azure: #0078d4;
+    --azure-light: #50b0f0;
+    --azure-dark: #004578;
+    --github: #238636;
+    --github-light: #3fb950;
+    --bg: #07080f;
+    --surface: #0d1117;
+    --surface2: #161b22;
+    --border: rgba(255,255,255,0.07);
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --accent: #58a6ff;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* ─── GRID BACKGROUND ─── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,120,212,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,120,212,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ─── AMBIENT GLOW ─── */
+  .glow-orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .glow-orb.a { width: 600px; height: 600px; background: rgba(0,120,212,0.12); top: -200px; left: -200px; }
+  .glow-orb.b { width: 500px; height: 500px; background: rgba(35,134,54,0.08); bottom: 100px; right: -200px; }
+  .glow-orb.c { width: 400px; height: 400px; background: rgba(88,166,255,0.06); top: 50%; left: 50%; transform: translate(-50%,-50%); }
+
+  /* ─── WRAPPER ─── */
+  .wrapper { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 0 24px; }
+
+  /* ─── HERO ─── */
+  header {
+    position: relative;
+    padding: 80px 0 60px;
+    text-align: center;
+  }
+
+  .badge-row {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    margin-bottom: 28px;
+    animation: fadeDown 0.6s ease both;
+  }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 14px;
+    border-radius: 100px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .badge.azure { background: rgba(0,120,212,0.15); color: var(--azure-light); border: 1px solid rgba(0,120,212,0.3); }
+  .badge.github { background: rgba(35,134,54,0.15); color: var(--github-light); border: 1px solid rgba(35,134,54,0.3); }
+  .badge.lab { background: rgba(88,166,255,0.1); color: var(--accent); border: 1px solid rgba(88,166,255,0.2); }
+  .badge svg { width: 12px; height: 12px; fill: currentColor; }
+
+  .hero-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2rem, 5vw, 3.4rem);
+    font-weight: 800;
+    line-height: 1.15;
+    color: #fff;
+    margin-bottom: 20px;
+    animation: fadeDown 0.7s ease 0.1s both;
+  }
+
+  .hero-title .highlight {
+    background: linear-gradient(135deg, var(--azure-light), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-sub {
+    font-size: 16px;
+    color: var(--muted);
+    max-width: 580px;
+    margin: 0 auto 40px;
+    animation: fadeDown 0.7s ease 0.2s both;
+  }
+
+  .hero-meta {
+    display: flex; align-items: center; justify-content: center; gap: 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    animation: fadeDown 0.7s ease 0.3s both;
+  }
+
+  .hero-meta span { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .dot.green { background: var(--github-light); box-shadow: 0 0 8px var(--github-light); animation: pulse 2s infinite; }
+  .dot.blue { background: var(--azure-light); }
+
+  /* ─── OVERVIEW BAR ─── */
+  .overview {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px 32px;
+    margin-bottom: 64px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 24px;
+    animation: fadeUp 0.7s ease 0.4s both;
+  }
+
+  .overview-item { text-align: center; }
+  .overview-item .num {
+    font-family: 'Syne', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--azure-light);
+  }
+  .overview-item .label {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 2px;
+  }
+
+  /* ─── SECTION HEADING ─── */
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--azure-light);
+    margin-bottom: 12px;
+  }
+
+  /* ─── STEPS ─── */
+  .steps { display: flex; flex-direction: column; gap: 0; }
+
+  .step {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 0 28px;
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .step.visible { opacity: 1; transform: translateY(0); }
+
+  /* connector */
+  .step-left { display: flex; flex-direction: column; align-items: center; }
+  .step-num {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+  .step-num.blue { background: rgba(0,120,212,0.2); color: var(--azure-light); border: 2px solid rgba(0,120,212,0.5); }
+  .step-num.green { background: rgba(35,134,54,0.2); color: var(--github-light); border: 2px solid rgba(35,134,54,0.4); }
+  .step-num.cyan { background: rgba(88,166,255,0.15); color: #a2d2ff; border: 2px solid rgba(88,166,255,0.3); }
+  .step-num.purple { background: rgba(163,113,247,0.15); color: #c9a7f6; border: 2px solid rgba(163,113,247,0.3); }
+
+  .step-line {
+    width: 2px;
+    flex: 1;
+    min-height: 32px;
+    background: linear-gradient(to bottom, var(--border), transparent);
+    margin: 8px 0;
+  }
+
+  .step-content {
+    padding-bottom: 48px;
+  }
+
+  .step-header {
+    display: flex; align-items: baseline; gap: 12px;
+    margin-bottom: 16px;
+    padding-top: 10px;
+  }
+
+  .step-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .step-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .tag-local { background: rgba(255,183,77,0.12); color: #ffd54f; border: 1px solid rgba(255,183,77,0.2); }
+  .tag-cloud { background: rgba(0,120,212,0.12); color: var(--azure-light); border: 1px solid rgba(0,120,212,0.2); }
+  .tag-deploy { background: rgba(35,134,54,0.12); color: var(--github-light); border: 1px solid rgba(35,134,54,0.2); }
+  .tag-test { background: rgba(163,113,247,0.12); color: #c9a7f6; border: 1px solid rgba(163,113,247,0.2); }
+
+  .step-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .step-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .step-card.blue-accent::before { background: linear-gradient(90deg, var(--azure), transparent); }
+  .step-card.green-accent::before { background: linear-gradient(90deg, var(--github), transparent); }
+  .step-card.cyan-accent::before { background: linear-gradient(90deg, var(--accent), transparent); }
+  .step-card.purple-accent::before { background: linear-gradient(90deg, #a371f7, transparent); }
+
+  /* tasks */
+  .tasks { display: flex; flex-direction: column; gap: 14px; }
+
+  .task {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding: 14px 16px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .task:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12); }
+
+  .task-icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-size: 15px;
+  }
+  .task-icon.blue-icon { background: rgba(0,120,212,0.15); }
+  .task-icon.green-icon { background: rgba(35,134,54,0.15); }
+  .task-icon.amber-icon { background: rgba(255,183,77,0.15); }
+  .task-icon.purple-icon { background: rgba(163,113,247,0.15); }
+
+  .task-text { flex: 1; }
+  .task-text strong { color: #cdd9e5; font-weight: 500; display: block; margin-bottom: 2px; font-size: 14px; }
+  .task-text p { color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+  /* code block */
+  .code-block {
+    background: #0d1117;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #79c0ff;
+    position: relative;
+  }
+  .code-block .comment { color: #8b949e; }
+  .code-block .keyword { color: var(--github-light); }
+  .code-block .string { color: #a5d6ff; }
+  .code-block .prompt { color: var(--muted); user-select: none; }
+
+  /* info strip */
+  .info-strip {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 12px 14px;
+    background: rgba(0,120,212,0.06);
+    border: 1px solid rgba(0,120,212,0.15);
+    border-radius: 10px;
+    margin-top: 14px;
+    font-size: 13px;
+    color: #79b8ff;
+  }
+  .info-strip svg { flex-shrink: 0; margin-top: 1px; }
+
+  /* ─── STUDENT BANNER ─── */
+  .student-banner {
+    position: relative; z-index: 2;
+    background: linear-gradient(90deg, rgba(0,120,212,0.95), rgba(0,60,140,0.95));
+    border-bottom: 2px solid rgba(88,166,255,0.5);
+    padding: 14px 24px;
+  }
+  .sb-inner {
+    max-width: 900px; margin: 0 auto;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .sb-avatar {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.4);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 800;
+    color: #fff; flex-shrink: 0;
+  }
+  .sb-info { display: flex; align-items: center; gap: 10px; flex: 1; flex-wrap: wrap; }
+  .sb-name {
+    font-family: 'Syne', sans-serif; font-size: 1.15rem; font-weight: 800;
+    color: #fff; letter-spacing: 0.01em;
+  }
+  .sb-divider { color: rgba(255,255,255,0.4); font-size: 1.2rem; }
+  .sb-num {
+    font-family: 'JetBrains Mono', monospace; font-size: 1rem; font-weight: 600;
+    color: rgba(255,255,255,0.85); letter-spacing: 0.1em;
+    background: rgba(0,0,0,0.2); padding: 3px 12px; border-radius: 100px;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  .sb-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    color: rgba(255,255,255,0.5);
+    background: rgba(255,255,255,0.08); padding: 4px 12px; border-radius: 100px;
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+
+  /* ─── GUIDE CARDS ─── */
+  .guide-steps { display: flex; flex-direction: column; gap: 16px; }
+
+  .guide-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    opacity: 0; transform: translateY(20px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .guide-card.visible { opacity: 1; transform: translateY(0); }
+
+  .guide-card-header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.015);
+  }
+  .guide-num {
+    width: 42px; height: 42px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 800;
+    border: 2px solid; flex-shrink: 0;
+  }
+  .guide-title { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; color: #fff; }
+  .guide-subtitle { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .guide-body { padding: 20px 22px; display: flex; flex-direction: column; gap: 10px; }
+
+  .guide-step-row {
+    display: flex; align-items: flex-start; gap: 12px;
+    font-size: 14px; color: #cdd9e5; line-height: 1.6;
+  }
+  .gs-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 7px; }
+
+  .tip-box {
+    padding: 12px 14px; border-radius: 10px;
+    font-size: 13px; line-height: 1.5; margin-top: 4px;
+  }
+  .tip-box.amber { background: rgba(255,183,77,0.08); border: 1px solid rgba(255,183,77,0.2); color: #ffd54f; }
+  .tip-box.green { background: rgba(35,134,54,0.08); border: 1px solid rgba(35,134,54,0.2); color: var(--github-light); }
+  .tip-box.blue  { background: rgba(0,120,212,0.08); border: 1px solid rgba(0,120,212,0.2); color: var(--azure-light); }
+
+  .cheat-grid { display: flex; flex-direction: column; gap: 6px; }
+  .cheat-row {
+    display: grid; grid-template-columns: 210px 1fr;
+    align-items: center; gap: 16px;
+    padding: 8px 12px; border-radius: 8px;
+    background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+  }
+  .cheat-cmd { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #79c0ff; }
+  .cheat-desc { font-size: 13px; color: var(--muted); }
+
+  @media (max-width: 500px) {
+    .cheat-row { grid-template-columns: 1fr; gap: 4px; }
+  }
+
+  /* ─── STUDENT CARD ─── */
+  .student-card {
+    display: inline-flex; align-items: center; gap: 14px;
+    margin-top: 28px;
+    padding: 12px 20px 12px 12px;
+    background: rgba(0,120,212,0.08);
+    border: 1px solid rgba(0,120,212,0.25);
+    border-radius: 100px;
+    animation: fadeUp 0.7s ease 0.4s both;
+  }
+  .student-avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--azure), var(--azure-light));
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-size: 13px; font-weight: 800;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .student-info { display: flex; flex-direction: column; gap: 1px; text-align: left; }
+  .student-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px; color: #fff; }
+  .student-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--azure-light); letter-spacing: 0.08em; }
+
+  /* ─── ARCHITECTURE DIAGRAM ─── */
+  .arch-section { margin-bottom: 64px; }
+
+  .arch-flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0;
+    padding: 32px 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+  }
+
+  .arch-node {
+    text-align: center;
+    padding: 16px 20px;
+  }
+  .arch-icon-wrap {
+    width: 56px; height: 56px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 10px;
+    font-size: 24px;
+  }
+  .arch-node .arch-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .arch-node .arch-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .arch-arrow {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 0 4px;
+  }
+  .arch-arrow-line {
+    width: 40px; height: 2px;
+    background: linear-gradient(90deg, rgba(0,120,212,0.4), rgba(88,166,255,0.4));
+    position: relative;
+  }
+  .arch-arrow-line::after {
+    content: ''; position: absolute;
+    right: -1px; top: -4px;
+    border-left: 8px solid rgba(88,166,255,0.5);
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+  }
+  .arch-arrow-label { font-size: 10px; color: var(--muted); margin-top: 6px; font-family: 'JetBrains Mono', monospace; }
+
+  /* ─── FOOTER ─── */
+  footer {
+    text-align: center;
+    padding: 48px 0 64px;
+    color: var(--muted);
+    font-size: 13px;
+    border-top: 1px solid var(--border);
+    margin-top: 24px;
+  }
+  footer .footer-logo {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--azure-light);
+    margin-bottom: 8px;
+  }
+
+  /* ─── ANIMATIONS ─── */
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  /* ─── PROGRESS BAR ─── */
+  .progress-bar-wrap {
+    position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 100;
+  }
+  #progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--azure), var(--azure-light));
+    width: 0%;
+    transition: width 0.1s;
+  }
+
+  /* ─── NAV ─── */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(7,8,15,0.85);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px;
+  }
+  .nav-brand {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--azure-light);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a {
+    font-size: 12px;
+    color: var(--muted);
+    text-decoration: none;
+    padding: 5px 12px;
+    border-radius: 8px;
+    transition: color 0.2s, background 0.2s;
+  }
+  .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+
+  @media (max-width: 600px) {
+    .nav-links { display: none; }
+    .overview { grid-template-columns: repeat(2,1fr); }
+    .arch-arrow { display: none; }
+    .arch-flow { gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Progress Bar -->
+<div class="progress-bar-wrap"><div id="progress-bar"></div></div>
+
+<!-- Ambient -->
+<div class="glow-orb a"></div>
+<div class="glow-orb b"></div>
+<div class="glow-orb c"></div>
+
+<!-- Nav -->
+<nav>
+  <div class="nav-brand">
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm3.5 11.5l-5-3V4h1.5v3.75l4.25 2.5-.75 1.25z"/></svg>
+    CI/CD Lab
+  </div>
+  <nav class="nav-links">
+    <a href="#github-guide">GitHub Rehberi</a>
+    <a href="#steps">Adımlar</a>
+    <a href="#arch">Mimari</a>
+  </nav>
+</nav>
+
+<!-- STUDENT BANNER -->
+<div class="student-banner">
+  <div class="sb-inner">
+    <div class="sb-avatar">ZÇ</div>
+    <div class="sb-info">
+      <span class="sb-name">Zeynep Çelik</span>
+      <span class="sb-divider">·</span>
+      <span class="sb-num">231001061</span>
+    </div>
+    <div class="sb-label">Öğrenci</div>
+  </div>
+</div>
+
+<!-- HERO -->
+<div class="wrapper">
+  <header>
+    <div class="badge-row">
+      <span class="badge azure">
+        <svg viewBox="0 0 24 24"><path d="M22.379 23.343a1.62 1.62 0 01-1.326-.005L8.917 17.682l-7.19 5.589A1.618 1.618 0 010 21.986V2.014A2.014 2.014 0 012.014 0h19.972A2.014 2.014 0 0124 2.014v19.972a2.014 2.014 0 01-1.621 1.357z"/></svg>
+        Azure App Service
+      </span>
+      <span class="badge github">
+        <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub Actions
+      </span>
+      <span class="badge lab">⚡ Hands-on Lab</span>
+    </div>
+
+    <h1 class="hero-title">
+      Azure App Service ve<br>
+      <span class="highlight">GitHub Actions</span> ile<br>
+      Otomatik Dağıtım
+    </h1>
+
+    <p class="hero-sub">
+      Yerel bir web uygulamasını GitHub'a yükleyerek ve Azure App Service üzerinde bir CI/CD pipeline hattı kurarak — her güncellemede otomatik bulut dağıtımı gerçekleştirin.
+    </p>
+
+    <div class="hero-meta">
+      <span><span class="dot green"></span>4 Adım</span>
+      <span><span class="dot blue"></span>Node.js / Python / .NET</span>
+      <span><span class="dot blue"></span>Azure Free Tier</span>
+    </div>
+
+  </header>
+
+  <!-- Overview -->
+  <div class="overview">
+    <div class="overview-item">
+      <div class="num">4</div>
+      <div class="label">Adım</div>
+    </div>
+    <div class="overview-item">
+      <div class="num">CI/CD</div>
+      <div class="label">Pipeline</div>
+    </div>
+    <div class="overview-item">
+      <div class="num">F1</div>
+      <div class="label">Ücretsiz Katman</div>
+    </div>
+    <div class="overview-item">
+      <div class="num">Auto</div>
+      <div class="label">Deploy</div>
+    </div>
+  </div>
+
+  <!-- Architecture -->
+  <section class="arch-section" id="arch">
+    <div class="section-label">// Sistem Mimarisi</div>
+    <div class="arch-flow">
+      <div class="arch-node">
+        <div class="arch-icon-wrap" style="background:rgba(255,183,77,0.12);">💻</div>
+        <div class="arch-name">Local</div>
+        <div class="arch-desc">Web App</div>
+      </div>
+      <div class="arch-arrow">
+        <div class="arch-arrow-line"></div>
+        <div class="arch-arrow-label">git push</div>
+      </div>
+      <div class="arch-node">
+        <div class="arch-icon-wrap" style="background:rgba(35,134,54,0.12);">
+          <svg viewBox="0 0 16 16" width="26" height="26" fill="#3fb950"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        </div>
+        <div class="arch-name">GitHub</div>
+        <div class="arch-desc">Repository</div>
+      </div>
+      <div class="arch-arrow">
+        <div class="arch-arrow-line"></div>
+        <div class="arch-arrow-label">trigger</div>
+      </div>
+      <div class="arch-node">
+        <div class="arch-icon-wrap" style="background:rgba(88,166,255,0.12);">⚙️</div>
+        <div class="arch-name">Actions</div>
+        <div class="arch-desc">Workflow</div>
+      </div>
+      <div class="arch-arrow">
+        <div class="arch-arrow-line"></div>
+        <div class="arch-arrow-label">deploy</div>
+      </div>
+      <div class="arch-node">
+        <div class="arch-icon-wrap" style="background:rgba(0,120,212,0.15);">☁️</div>
+        <div class="arch-name">Azure</div>
+        <div class="arch-desc">App Service</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GitHub Beginner Guide -->
+  <section id="github-guide" style="margin-bottom: 64px;">
+    <div class="section-label">// GitHub'a Başlangıç Rehberi</div>
+    <div style="margin-top: 6px; margin-bottom: 24px; color: var(--muted); font-size: 14px;">
+      Hiç GitHub kullanmadıysan buradan başla — sıfırdan ilk push'a kadar her şey burada.
+    </div>
+
+    <div class="guide-steps">
+
+      <div class="guide-card">
+        <div class="guide-card-header">
+          <div class="guide-num" style="background:rgba(255,183,77,0.15);color:#ffd54f;border-color:rgba(255,183,77,0.35);">G1</div>
+          <div>
+            <div class="guide-title">GitHub Hesabı Aç</div>
+            <div class="guide-subtitle">github.com → Sign up</div>
+          </div>
+        </div>
+        <div class="guide-body">
+          <div class="guide-step-row"><div class="gs-dot" style="background:#ffd54f;"></div><div><strong>github.com</strong> adresine git ve <em>"Sign up"</em> butonuna tıkla.</div></div>
+          <div class="guide-step-row"><div class="gs-dot" style="background:#ffd54f;"></div><div>E-posta adresi, şifre ve kullanıcı adı gir. Okul e-postanı kullanırsan GitHub Education avantajlarından yararlanabilirsin.</div></div>
+          <div class="guide-step-row"><div class="gs-dot" style="background:#ffd54f;"></div><div>E-postana gelen doğrulama kodunu girerek kaydı tamamla.</div></div>
+          <div class="tip-box amber">💡 Kullanıcı adın profesyonel olsun — ileride CV'inde kullanacaksın.</div>
+        </div>
+      </div>
+
+      <div class="guide-card">
+        <div class="guide-card-header">
+          <div class="guide-num" style="background:rgba(0,120,212,0.15);color:var(--azure-light);border-color:rgba(0,120,212,0.35);">G2</div>
+          <div>
+            <div class="guide-title">Git'i Bilgisayarına Kur</div>
+            <div class="guide-subtitle">git-scm.com → Download</div>
+          </div>
+        </div>
+        <div class="guide-body">
+          <div class="guide-step-row"><div class="gs-dot" style="background:var(--azure-light);"></div><div><strong>git-scm.com/downloads</strong> adresine git, işletim sistemine uygun versiyonu indir ve kur.</div></div>
+          <div class="guide-step-row"><div class="gs-dot" style="background:var(--azure-light);"></div><div>Kurulumdan sonra <strong>Terminal</strong> (Mac/Linux) veya <strong>Git Bash</strong> (Windows) uygulamasını aç.</div></div>
+          <div class="guide-step-row"><div class="gs-dot" style="background:var(--azure-light);"></div><div>Kurulumu doğrula:</div></div>
+          <div class="code-block"><span class="prompt">$ </span><span class="keyword">git</span> --version<br><span class="comment"># git version 2.x.x çıkması lazım</span></div>
+          <div class="guide-step-row" style="margin-top:12px;"><div class="gs-dot" style="background:var(--azure-light);"></div><div>Git'e kimliğini tanıt (sadece bir kez yapılır):</div></div>
+          <div class="code-block">
+            <span class="prompt">$ </span><span class="keyword">git config</span> --global user.name <span class="string">"Zeynep Çelik"</span><br>
+            <span class="prompt">$ </span><span class="keyword">git config</span> --global user.email <span class="string">"senin@email.com"</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="guide-card">
+        <div class="guide-card-header">
+          <div class="guide-num" style="background:rgba(35,134,54,0.15);color:var(--github-light);border-color:rgba(35,134,54,0.35);">G3</div>
+          <div>
+            <div class="guide-title">GitHub'da Repository Oluştur</div>
+            <div class="guide-subtitle">+ New repository</div>
+          </div>
+        </div>
+        <div class="guide-body">
+          <div class="guide-step-row"><div class="gs-dot" style="background:var(--github-light);"></div><div>GitHub'a giriş yap → sağ üstteki <strong>"+"</strong> ikonuna tıkla → <em>"New repository"</em> seç.</div></div>
+          <div class="guide-step-row"><div class="gs-dot" style="background:var(--github-light);"></div><div>Repository adı yaz (örn: <code>azure-cicd-lab</code>). Görünürlüğü <strong>Public</strong> olarak ayarla.</div></div>
+          <div class="guide-step-row"><div class="gs-dot" style="background:var(--github-light);"></div><div><em>"Add a README file"</em> kutusunu işaretle → <strong>"Create repository"</strong> butonuna bas.</div></div>
+          <div class="tip-box green">✅ Repository hazır! Sayfadaki URL'yi kopyala: <code>https://github.com/kullanici/repo.git</code></div>
+        </div>
+      </div>
+
+      <div class="guide-card">
+        <div class="guide-card-header">
+          <div class="guide-num" style="background:rgba(88,166,255,0.12);color:#a2d2ff;border-color:rgba(88,166,255,0.3);">G4</div>
+          <div>
+            <div class="guide-title">Kodu GitHub'a Gönder</div>
+            <div class="guide-subtitle">add → commit → push</div>
+          </div>
+        </div>
+        <div class="guide-body">
+          <div class="guide-step-row"><div class="gs-dot" style="background:#a2d2ff;"></div><div>Terminal'de proje klasörüne gir ve Git'i başlat:</div></div>
+          <div class="code-block">
+            <span class="prompt">$ </span><span class="keyword">cd</span> <span class="string">proje-klasorum</span><br>
+            <span class="prompt">$ </span><span class="keyword">git init</span><br>
+            <span class="prompt">$ </span><span class="keyword">git remote add</span> origin https://github.com/<span class="string">kullanici/azure-cicd-lab.git</span>
+          </div>
+          <div class="guide-step-row" style="margin-top:12px;"><div class="gs-dot" style="background:#a2d2ff;"></div><div>Dosyaları ekle, kaydet ve gönder:</div></div>
+          <div class="code-block">
+            <span class="comment"># Tüm dosyaları sahneye al</span><br>
+            <span class="prompt">$ </span><span class="keyword">git add</span> .<br><br>
+            <span class="comment"># Commit yap — değişikliği kaydet</span><br>
+            <span class="prompt">$ </span><span class="keyword">git commit</span> -m <span class="string">"ilk commit"</span><br><br>
+            <span class="comment"># GitHub'a gönder</span><br>
+            <span class="prompt">$ </span><span class="keyword">git push</span> -u origin main
+          </div>
+          <div class="tip-box blue">🎉 Tebrikler! GitHub sayfanı yenile — kodların orada görünmeli.</div>
+        </div>
+      </div>
+
+      <div class="guide-card cheatsheet">
+        <div class="guide-card-header">
+          <div class="guide-num" style="background:rgba(163,113,247,0.15);color:#c9a7f6;border-color:rgba(163,113,247,0.3);">📋</div>
+          <div>
+            <div class="guide-title">Git Komutları Kopya Kağıdı</div>
+            <div class="guide-subtitle">En sık kullanacakların</div>
+          </div>
+        </div>
+        <div class="guide-body">
+          <div class="cheat-grid">
+            <div class="cheat-row"><div class="cheat-cmd">git status</div><div class="cheat-desc">Hangi dosyalar değişti?</div></div>
+            <div class="cheat-row"><div class="cheat-cmd">git add .</div><div class="cheat-desc">Tüm değişiklikleri hazırla</div></div>
+            <div class="cheat-row"><div class="cheat-cmd">git commit -m "mesaj"</div><div class="cheat-desc">Değişiklikleri kaydet</div></div>
+            <div class="cheat-row"><div class="cheat-cmd">git push</div><div class="cheat-desc">GitHub'a gönder</div></div>
+            <div class="cheat-row"><div class="cheat-cmd">git pull</div><div class="cheat-desc">GitHub'dan güncelle</div></div>
+            <div class="cheat-row"><div class="cheat-cmd">git log --oneline</div><div class="cheat-desc">Geçmiş commit'leri gör</div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Steps -->
+  <section id="steps">
+    <div class="section-label">// Adım Adım Kılavuz</div>
+    <br>
+
+    <div class="steps">
+
+      <!-- STEP 1 -->
+      <div class="step" data-step="1">
+        <div class="step-left">
+          <div class="step-num blue">1</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-content">
+          <div class="step-header">
+            <span class="step-title">Uygulama Hazırlığı</span>
+            <span class="step-tag tag-local">Local</span>
+          </div>
+          <div class="step-card blue-accent">
+            <div class="tasks">
+              <div class="task">
+                <div class="task-icon amber-icon">📁</div>
+                <div class="task-text">
+                  <strong>Web Uygulaması Oluştur</strong>
+                  <p>Bilgisayarınızda basit bir web uygulaması oluşturun. Node.js, Python veya .NET kullanabilirsiniz.</p>
+                </div>
+              </div>
+              <div class="task">
+                <div class="task-icon blue-icon">✏️</div>
+                <div class="task-text">
+                  <strong>Kimlik Bilgilerini Ekle</strong>
+                  <p>Uygulamanın ana sayfasına adınızı ve öğrenci numaranızı yazan bir metin ekleyin.</p>
+                </div>
+              </div>
+              <div class="task">
+                <div class="task-icon green-icon">🔧</div>
+                <div class="task-text">
+                  <strong>Git Deposu Başlat & GitHub'a Yükle</strong>
+                  <p>Projeniz için bir Git deposu başlatın ve kodlarınızı kişisel GitHub hesabınızdaki yeni bir repository'ye push edin.</p>
+                </div>
+              </div>
+            </div>
+            <div class="code-block">
+              <span class="comment"># Yeni proje klasörü oluştur</span><br>
+              <span class="prompt">$ </span><span class="keyword">mkdir</span> <span class="string">my-web-app</span> && <span class="keyword">cd</span> my-web-app<br>
+              <span class="prompt">$ </span><span class="keyword">git init</span><br>
+              <span class="prompt">$ </span><span class="keyword">git remote add</span> origin https://github.com/<span class="string">&lt;kullanici&gt;</span>/<span class="string">&lt;repo&gt;</span>.git<br>
+              <span class="prompt">$ </span><span class="keyword">git push</span> -u origin main
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2 -->
+      <div class="step" data-step="2">
+        <div class="step-left">
+          <div class="step-num green">2</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-content">
+          <div class="step-header">
+            <span class="step-title">Azure App Service Kurulumu</span>
+            <span class="step-tag tag-cloud">Cloud</span>
+          </div>
+          <div class="step-card green-accent">
+            <div class="tasks">
+              <div class="task">
+                <div class="task-icon blue-icon">🌐</div>
+                <div class="task-text">
+                  <strong>Azure Portal'dan Web App Oluştur</strong>
+                  <p>portal.azure.com adresine girerek yeni bir App Service (Web App) kaynağı oluşturun.</p>
+                </div>
+              </div>
+              <div class="task">
+                <div class="task-icon green-icon">⚡</div>
+                <div class="task-text">
+                  <strong>Runtime Stack Seç</strong>
+                  <p>Yazdığınız dile uygun ortamı seçin: Node.js 20 LTS, Python 3.11 veya .NET 8.0</p>
+                </div>
+              </div>
+              <div class="task">
+                <div class="task-icon amber-icon">💰</div>
+                <div class="task-text">
+                  <strong>Ücretsiz F1 Katmanı Seç</strong>
+                  <p>App Service Plan oluştururken <strong>F1 (Free)</strong> katmanını seçerek maliyeti sıfıra indirin.</p>
+                </div>
+              </div>
+            </div>
+            <div class="info-strip">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 1.5a5.5 5.5 0 110 11 5.5 5.5 0 010-11zM7.25 5h1.5v5h-1.5V5zm0 6h1.5v1.5h-1.5V11z"/></svg>
+              <span>F1 katmanı ücretsiz olup günde 60 dakika CPU süresi ve 1 GB depolama sunar — lab için yeterlidir.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3 -->
+      <div class="step" data-step="3">
+        <div class="step-left">
+          <div class="step-num cyan">3</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-content">
+          <div class="step-header">
+            <span class="step-title">Dağıtım Yapılandırması</span>
+            <span class="step-tag tag-deploy">Deploy</span>
+          </div>
+          <div class="step-card cyan-accent">
+            <div class="tasks">
+              <div class="task">
+                <div class="task-icon blue-icon">🔌</div>
+                <div class="task-text">
+                  <strong>Deployment Center'ı Aç</strong>
+                  <p>Azure Portal'da Web App'inizi açın → Sol menüden <em>Deployment Center</em> sekmesine gidin.</p>
+                </div>
+              </div>
+              <div class="task">
+                <div class="task-icon green-icon">🔗</div>
+                <div class="task-text">
+                  <strong>GitHub Kaynak Olarak Bağla</strong>
+                  <p>Kaynak (Source) olarak <strong>GitHub</strong>'ı seçin ve Azure'ın GitHub hesabınıza erişimine izin verin.</p>
+                </div>
+              </div>
+              <div class="task">
+                <div class="task-icon amber-icon">🌿</div>
+                <div class="task-text">
+                  <strong>Repository & Branch Seç</strong>
+                  <p>GitHub repository'nizi ve <code>main</code> branch'inizi seçin. Azure otomatik olarak bir GitHub Actions <code>.yml</code> workflow dosyası oluşturacak.</p>
+                </div>
+              </div>
+            </div>
+            <div class="code-block">
+              <span class="comment"># Azure tarafından otomatik oluşturulan workflow</span><br>
+              <span class="keyword">on:</span><br>
+              &nbsp;&nbsp;<span class="keyword">push:</span><br>
+              &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">branches:</span><br>
+              &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- <span class="string">main</span><br><br>
+              <span class="keyword">jobs:</span><br>
+              &nbsp;&nbsp;<span class="keyword">build-and-deploy:</span><br>
+              &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">runs-on:</span> <span class="string">ubuntu-latest</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 4 -->
+      <div class="step" data-step="4">
+        <div class="step-left">
+          <div class="step-num purple">4</div>
+        </div>
+        <div class="step-content">
+          <div class="step-header">
+            <span class="step-title">CI/CD Sürecini Test Et</span>
+            <span class="step-tag tag-test">Monitoring</span>
+          </div>
+          <div class="step-card purple-accent">
+            <div class="tasks">
+              <div class="task">
+                <div class="task-icon purple-icon">🎨</div>
+                <div class="task-text">
+                  <strong>Küçük Bir Değişiklik Yap & Push Et</strong>
+                  <p>Kodunuzda küçük bir değişiklik yapın — örneğin arka plan rengini değiştirin — ve <code>git commit + push</code> yapın.</p>
+                </div>
+              </div>
+              <div class="task">
+                <div class="task-icon blue-icon">👀</div>
+                <div class="task-text">
+                  <strong>Actions Sekmesini İzle</strong>
+                  <p>GitHub repository'nizde <strong>Actions</strong> sekmesine gidin. <em>Build</em> ve <em>Deploy</em> adımlarının canlı olarak çalıştığını izleyin.</p>
+                </div>
+              </div>
+              <div class="task">
+                <div class="task-icon green-icon">✅</div>
+                <div class="task-text">
+                  <strong>Azure URL'den Doğrula</strong>
+                  <p>İşlem tamamlandığında Azure'daki URL'nizi tarayıcıda açın ve değişikliğin otomatik olarak yansıdığını doğrulayın.</p>
+                </div>
+              </div>
+            </div>
+            <div class="info-strip" style="background:rgba(163,113,247,0.06); border-color:rgba(163,113,247,0.2); color: #c9a7f6;">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 1.5a5.5 5.5 0 110 11 5.5 5.5 0 010-11zM7.25 5h1.5v5h-1.5V5zm0 6h1.5v1.5h-1.5V11z"/></svg>
+              <span>Başarılı bir CI/CD pipeline: <code>push</code> → otomatik build → otomatik deploy → canlı URL güncellemesi</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-logo">Azure CI/CD Lab</div>
+    <p>Bulut Bilişim | Azure App Service + GitHub Actions</p>
+    <p style="margin-top:8px; font-family:'JetBrains Mono',monospace; font-size:11px; color: var(--muted);">
+      Hands-on Lab &nbsp;·&nbsp; CI/CD Pipeline &nbsp;·&nbsp; Otomatik Dağıtım
+    </p>
+  </footer>
+
+</div>
+
+<script>
+  // Progress bar
+  window.addEventListener('scroll', () => {
+    const total = document.documentElement.scrollHeight - window.innerHeight;
+    const pct = total > 0 ? (window.scrollY / total) * 100 : 0;
+    document.getElementById('progress-bar').style.width = pct + '%';
+  });
+
+  // Scroll reveal
+  const observer = new IntersectionObserver(
+    entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }),
+    { threshold: 0.15, rootMargin: '0px 0px -40px 0px' }
+  );
+  document.querySelectorAll('.step, .guide-card').forEach((el, i) => {
+    el.style.transitionDelay = (i * 0.07) + 's';
+    observer.observe(el);
+  });
+</script>
+</body>
+</html>
